@@ -1,0 +1,171 @@
+{
+  "service_providers": [
+    {
+      "s_no": 1,
+      "name_of_service_provider": "Aircel Ltd/ Dishnet Wireless Ltd",
+      "code": "D"
+    },
+    {
+      "s_no": 2,
+      "name_of_service_provider": "Bharti Airtel Ltd/ Bharti Hexacom Ltd",
+      "code": "A"
+    },
+    {
+      "s_no": 3,
+      "name_of_service_provider": "Bharat Sanchar Nigam Ltd",
+      "code": "B"
+    },
+    {
+      "s_no": 4,
+      "name_of_service_provider": "Quadrant Televentures Limited",
+      "code": "Q"
+    },
+    {
+      "s_no": 5,
+      "name_of_service_provider": "Mahanagar Telephone Nigam Ltd",
+      "code": "M"
+    },
+    {
+      "s_no": 6,
+      "name_of_service_provider": "Reliance Communications Ltd",
+      "code": "R"
+    },
+    {
+      "s_no": 7,
+      "name_of_service_provider": "Reliance Jio Infocomm Ltd",
+      "code": "J"
+    },
+    {
+      "s_no": 8,
+      "name_of_service_provider": "Reliance Telecom Ltd",
+      "code": "E"
+    },
+    {
+      "s_no": 9,
+      "name_of_service_provider": "Tata Teleservices Ltd/ Tata Teleservices (Mah) Ltd",
+      "code": "T"
+    },
+    {
+      "s_no": 10,
+      "name_of_service_provider": "Vodafone Idea Ltd.",
+      "code": "V"
+    },
+    {
+      "s_no": 11,
+      "name_of_service_provider": "V-CON Mobile & Infra Private Ltd.",
+      "code": "C"
+    }
+  ],
+  "service_areas": [
+    {
+      "s_no": 1,
+      "service_area": "Andhra Pradesh",
+      "code": "A"
+    },
+    {
+      "s_no": 2,
+      "service_area": "Assam",
+      "code": "S"
+    },
+    {
+      "s_no": 3,
+      "service_area": "Bihar",
+      "code": "B"
+    },
+    {
+      "s_no": 4,
+      "service_area": "Delhi",
+      "code": "D"
+    },
+    {
+      "s_no": 5,
+      "service_area": "Gujarat",
+      "code": "G"
+    },
+    {
+      "s_no": 6,
+      "service_area": "Haryana",
+      "code": "H"
+    },
+    {
+      "s_no": 7,
+      "service_area": "Himachal Pradesh",
+      "code": "I"
+    },
+    {
+      "s_no": 8,
+      "service_area": "Jammu & Kashmir",
+      "code": "J"
+    },
+    {
+      "s_no": 9,
+      "service_area": "Karnataka",
+      "code": "X"
+    },
+    {
+      "s_no": 10,
+      "service_area": "Kerala",
+      "code": "L"
+    },
+    {
+      "s_no": 11,
+      "service_area": "Kolkata",
+      "code": "K"
+    },
+    {
+      "s_no": 12,
+      "service_area": "Madhya Pradesh",
+      "code": "Y"
+    },
+    {
+      "s_no": 13,
+      "service_area": "Maharashtra",
+      "code": "Z"
+    },
+    {
+      "s_no": 14,
+      "service_area": "Mumbai",
+      "code": "M"
+    },
+    {
+      "s_no": 15,
+      "service_area": "North East",
+      "code": "N"
+    },
+    {
+      "s_no": 16,
+      "service_area": "Orissa",
+      "code": "O"
+    },
+    {
+      "s_no": 17,
+      "service_area": "Punjab",
+      "code": "P"
+    },
+    {
+      "s_no": 18,
+      "service_area": "Rajasthan",
+      "code": "R"
+    },
+    {
+      "s_no": 19,
+      "service_area": "TamilNadu including Chennai",
+      "code": "T"
+    },
+    {
+      "s_no": 20,
+      "service_area": "UP-East",
+      "code": "E"
+    },
+    {
+      "s_no": 21,
+      "service_area": "UP-West",
+      "code": "W"
+    },
+    {
+      "s_no": 22,
+      "service_area": "West Bengal",
+      "code": "V"
+    }
+  ]
+}
