@@ -1,4 +1,4 @@
-# CyberSaathi backend
+# CyberRakshak backend
 
 Node.js API for the mobile app's focused cyber-safety chat and preliminary scan checks.
 

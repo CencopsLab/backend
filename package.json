@@ -1,8 +1,8 @@
 {
-  "name": "cybersaathi-backend",
+  "name": "CyberRakshak-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "CyberSaathi chat and preliminary scan API",
+  "description": "CyberRakshak chat and preliminary scan API",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

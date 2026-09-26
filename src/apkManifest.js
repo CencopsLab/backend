@@ -8,14 +8,14 @@ const execFileAsync = promisify(execFile);
 const decoderPath = path.join(__dirname, '..', 'tools', 'manifest.py');
 
 async function inspectApkPermissions(buffer) {
-  const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'cybersaathi-apk-'));
+  const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'CyberRakshak-apk-'));
   const apkPath = path.join(tempDirectory, 'application.apk');
   const decodedPath = path.join(tempDirectory, 'AndroidManifest_decoded.xml');
 
   try {
     await fs.writeFile(apkPath, buffer);
     await execFileAsync(process.env.PYTHON_BIN || 'python', [decoderPath, apkPath], {
-      timeout: 20000,
+      timeout: 120000,
       maxBuffer: 2 * 1024 * 1024,
       windowsHide: true,
     });
