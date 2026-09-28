@@ -5,7 +5,7 @@ const express = require('express');
 const multer = require('multer');
 const { SYSTEM_PROMPT } = require('./prompt');
 const { requestChatReply } = require('./chatCompletion');
-const { isCyberRelated, outOfScopeReply } = require('./chatScope');
+const { greetingReply, isCyberRelated, isGreeting, outOfScopeReply } = require('./chatScope');
 const { checkFile, runTextCheck } = require('./checks');
 const { reviewUrlWithGroq } = require('./urlAssessment');
 const contacts = require('../data/contacts.json');
@@ -42,6 +42,10 @@ app.post('/api/chat', async (request, response) => {
 
   if (!message || message.length > 2000) {
     return response.status(400).json({ error: 'message must be between 1 and 2000 characters' });
+  }
+
+  if (isGreeting(message)) {
+    return response.json({ reply: greetingReply(language) });
   }
 
   const history = sessions.get(sessionId) || [];

@@ -1,6 +1,24 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { isCyberRelated, outOfScopeReply } = require('../src/chatScope');
+const { greetingReply, isCyberRelated, isGreeting, outOfScopeReply } = require('../src/chatScope');
+
+test('recognizes standalone greetings and courtesies', () => {
+  for (const message of ['hi', 'hellooo!', 'hey there', 'good morning', 'thank you', 'नमस्ते', 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ']) {
+    assert.equal(isGreeting(message), true, message);
+  }
+});
+
+test('does not treat a greeting followed by another request as a greeting-only message', () => {
+  assert.equal(isGreeting('Hi, write a poem about the ocean'), false);
+  assert.equal(isGreeting('Hello, how do I report phishing?'), false);
+});
+
+test('provides a localized greeting without involving unrelated request handling', () => {
+  assert.match(greetingReply('en'), /Hi!/);
+  assert.match(greetingReply('hi'), /नमस्ते/);
+  assert.match(greetingReply('pa'), /ਸਤ ਸ੍ਰੀ ਅਕਾਲ/);
+  assert.equal(greetingReply('unknown'), greetingReply('en'));
+});
 
 test('allows common cybersecurity and online safety topics', () => {
   for (const message of [
