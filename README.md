@@ -29,10 +29,13 @@ The repository root contains `render.yaml`. Create a Render Blueprint from the r
 ## Endpoints
 
 - `GET /health`
+- `GET /api/contacts` returns the contacts shown on the app's Locator screen.
 - `POST /api/chat` with `{ "message": "...", "session_id": "..." }`
 - `POST /api/scan` with `{ "url": "..." }`
 - `POST /api/scan` with `{ "type": "email|mobile", "value": "..." }` or `{ "type": "sms", "header": "..." }`
-- `POST /api/scan` multipart with a `file` field. APK responses include the declared Android `permissions` list.
+- `POST /api/scan` multipart with a `file` field (maximum 150 MB). APK responses include the declared Android `permissions` list.
+
+File uploads have no application-level request timeout so slow connections can finish. APK manifest extraction has a separate 10-minute default limit (`APK_MANIFEST_TIMEOUT_MS`). Email domain checks query MX records on each request, falling back to address records for domains without MX records. DNS proves only that a domain has mail/address records; it cannot authenticate the sender.
 
 URL scans combine local URL-pattern checks with a Groq AI review of the URL string. The model does not browse the site, follow redirects, or check live domain reputation. Its 0-100 risk estimate is heuristic, not a calibrated probability; deterministic URL warnings impose a minimum score. Shorteners are flagged because they conceal destinations, while free-hosting domains are context only and are not treated as malicious by themselves. If Groq is unavailable, the API returns the deterministic checks and marks the AI review unavailable.
 

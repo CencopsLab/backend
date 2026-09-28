@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { checkUrl, parseSmsHeader, runTextCheck } = require('../src/checks');
+const { checkFile, checkUrl, parseSmsHeader, runTextCheck } = require('../src/checks');
 const { reviewUrlWithGroq } = require('../src/urlAssessment');
 
 function mockGroqResponse(score, reason) {
@@ -69,16 +69,69 @@ test('treats URL shorteners as concealment signals and free hosting as context o
   assert.equal(hosted.checks.find((check) => check.name === 'Free-hosting platform').status, 'info');
 });
 
+test('marks an APK with no readable Android manifest as suspicious', async () => {
+  const result = await checkFile(
+    { originalname: 'missing-manifest.apk', buffer: Buffer.alloc(0) },
+    { inspectApkPermissions: async () => { throw new Error('Could not read AndroidManifest.xml: missing'); } },
+  );
+
+  assert.equal(result.verdict, 'suspicious');
+  assert.equal(result.checks[0].status, 'warning');
+  assert.match(result.summary, /cannot be verified/);
+});
+
+test('keeps APK tool failures unrelated to the manifest as unknown', async () => {
+  const result = await checkFile(
+    { originalname: 'tool-error.apk', buffer: Buffer.alloc(0) },
+    { inspectApkPermissions: async () => { throw new Error('Python runtime unavailable'); } },
+  );
+
+  assert.equal(result.verdict, 'unknown');
+  assert.equal(result.checks[0].status, 'unavailable');
+});
+
 test('marks an email as legitimate-looking when its domain resolves', async () => {
   const result = await runTextCheck('email', 'abc123@xyz.com', { lookup: async () => ({ address: '93.184.216.34', family: 4 }) });
 
   assert.equal(result.verdict, 'safe');
-  assert.equal(result.guidance.findings[0], 'The sender domain xyz.com exists.');
+  assert.equal(result.guidance.findings[0], 'The sender domain xyz.com has address records.');
   assert.equal(result.checks.find((check) => check.name === 'Sender domain').status, 'pass');
 });
 
+test('checks the mail exchanger on every email request', async () => {
+  let mxLookups = 0;
+  const options = { mxLookup: async () => { mxLookups += 1; return [{ exchange: 'mail.xyz.com', priority: 10 }]; } };
+
+  await runTextCheck('email', 'first@xyz.com', options);
+  await runTextCheck('email', 'second@xyz.com', options);
+
+  assert.equal(mxLookups, 2);
+});
+
+test('falls back to address records when a domain has no MX records', async () => {
+  let addressLookups = 0;
+  const result = await runTextCheck('email', 'abc123@example.com', {
+    mxLookup: async () => [],
+    addressLookup: async () => { addressLookups += 1; return { address: '192.0.2.1', family: 4 }; },
+  });
+
+  assert.equal(result.verdict, 'safe');
+  assert.equal(addressLookups, 1);
+});
+
+test('reports transient DNS failure as unavailable instead of a bad domain', async () => {
+  const result = await runTextCheck('email', 'abc123@example.com', {
+    mxLookup: async () => { throw Object.assign(new Error('Temporary DNS failure'), { code: 'EAI_AGAIN' }); },
+    lookup: async () => { throw Object.assign(new Error('Temporary DNS failure'), { code: 'EAI_AGAIN' }); },
+  });
+
+  assert.equal(result.verdict, 'unknown');
+  assert.equal(result.checks.find((check) => check.name === 'Sender domain').status, 'unavailable');
+  assert.match(result.summary, /could not be checked right now/);
+});
+
 test('marks an email as suspicious when its domain does not resolve', async () => {
-  const result = await runTextCheck('email', 'abc123@not-real.invalid', { lookup: async () => { throw new Error('ENOTFOUND'); } });
+  const result = await runTextCheck('email', 'abc123@not-real.invalid', { lookup: async () => { throw Object.assign(new Error('Not found'), { code: 'ENOTFOUND' }); } });
 
   assert.equal(result.verdict, 'suspicious');
   assert.match(result.summary, /sender domain not-real\.invalid could not be found/);
@@ -129,7 +182,7 @@ test('parses TSP, LSA, header, and category with optional separator spaces', () 
 test('looks up provider, service area, principal entity, and category', () => {
   const result = runTextCheck('sms', 'AA - IOCXRP - S');
 
-  assert.equal(result.verdict, 'unknown');
+  assert.equal(result.verdict, 'safe');
   assert.equal(result.scannedTarget, 'AA - IOCXRP - S');
   assert.equal(result.headerDetails.serviceProvider, 'Bharti Airtel Ltd/ Bharti Hexacom Ltd');
   assert.equal(result.headerDetails.serviceArea, 'Andhra Pradesh');
@@ -143,6 +196,7 @@ test('looks up provider, service area, principal entity, and category', () => {
 test('looks up a header and suffix without attempting TSP or LSA resolution', () => {
   const result = runTextCheck('sms', 'IOCXRP - G');
 
+  assert.equal(result.verdict, 'likely_safe');
   assert.equal(result.headerDetails.serviceProvider, null);
   assert.equal(result.headerDetails.serviceArea, null);
   assert.equal(result.headerDetails.principalEntityName, 'iNDIAN OIL CORPORATION LIMITED');
@@ -154,6 +208,7 @@ test('looks up a header and suffix without attempting TSP or LSA resolution', ()
 test('looks up a header without resolving absent optional components', () => {
   const result = runTextCheck('sms', 'IOCXRP');
 
+  assert.equal(result.verdict, 'likely_safe');
   assert.equal(result.headerDetails.header, 'IOCXRP');
   assert.equal(result.headerDetails.principalEntityName, 'iNDIAN OIL CORPORATION LIMITED');
   assert.equal(result.headerDetails.category, null);
@@ -168,4 +223,11 @@ test('maps each permitted SMS category suffix', () => {
     const result = runTextCheck('sms', `IOCXRP - ${suffix}`);
     assert.equal(result.headerDetails.category, category);
   }
+});
+
+test('marks an SMS header absent from the supplied directory as suspicious', () => {
+  const result = runTextCheck('sms', 'UNKNOWN - G');
+
+  assert.equal(result.verdict, 'suspicious');
+  assert.match(result.summary, /does not prove fraud/);
 });

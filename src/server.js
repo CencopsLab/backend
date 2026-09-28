@@ -4,13 +4,16 @@ const cors = require('cors');
 const express = require('express');
 const multer = require('multer');
 const { SYSTEM_PROMPT } = require('./prompt');
+const { requestChatReply } = require('./chatCompletion');
+const { isCyberRelated, outOfScopeReply } = require('./chatScope');
 const { checkFile, runTextCheck } = require('./checks');
 const { reviewUrlWithGroq } = require('./urlAssessment');
+const contacts = require('../data/contacts.json');
 
 const app = express();
 const port = Number(process.env.PORT || 8000);
-const requestTimeoutMs = Number(process.env.REQUEST_TIMEOUT_MS || 10 * 60 * 1000);
-const maxTokens = Number(process.env.GROQ_MAX_TOKENS || 240);
+const requestTimeoutMs = Number(process.env.REQUEST_TIMEOUT_MS || 0);
+const maxTokens = Number(process.env.GROQ_MAX_TOKENS || 768);
 const temperature = Number(process.env.GROQ_TEMPERATURE || 0.2);
 const groqModel = String(process.env.GROQ_MODEL || '').trim();
 const sessions = new Map();
@@ -27,6 +30,10 @@ app.get('/health', (_request, response) => {
   response.json({ ok: true, service: 'CyberRakshak-backend' });
 });
 
+app.get('/api/contacts', (_request, response) => {
+  response.json(contacts);
+});
+
 app.post('/api/chat', async (request, response) => {
   const message = typeof request.body?.message === 'string' ? request.body.message.trim() : '';
   const sessionId = typeof request.body?.session_id === 'string' ? request.body.session_id : 'anonymous';
@@ -36,6 +43,12 @@ app.post('/api/chat', async (request, response) => {
   if (!message || message.length > 2000) {
     return response.status(400).json({ error: 'message must be between 1 and 2000 characters' });
   }
+
+  const history = sessions.get(sessionId) || [];
+  if (!isCyberRelated(message, history)) {
+    return response.json({ reply: outOfScopeReply(language) });
+  }
+
   if (!process.env.GROQ_API_KEY) {
     return response.status(503).json({ error: 'GROQ_API_KEY is not configured on the backend' });
   }
@@ -43,7 +56,6 @@ app.post('/api/chat', async (request, response) => {
     return response.status(503).json({ error: 'GROQ_MODEL is not configured on the backend' });
   }
 
-  const history = sessions.get(sessionId) || [];
   const messages = [
     { role: 'system', content: SYSTEM_PROMPT },
     { role: 'system', content: `Reply entirely in ${languageName}. This language requirement is mandatory for every sentence, heading, and bullet. Keep only technical names, URLs, permission names, and emergency number 1930 unchanged when needed.` },
@@ -52,34 +64,19 @@ app.post('/api/chat', async (request, response) => {
   ];
 
   try {
-    const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: groqModel,
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-      }),
+    const reply = await requestChatReply({
+      apiKey: process.env.GROQ_API_KEY,
+      model: groqModel,
+      messages,
+      temperature,
+      maxTokens,
     });
-
-    const payload = await groqResponse.json();
-    if (!groqResponse.ok) {
-      console.error(`Groq API error for model "${groqModel}":`, payload?.error?.message || groqResponse.status);
-      return response.status(502).json({ error: 'The language model could not answer right now' });
-    }
-
-    const reply = payload?.choices?.[0]?.message?.content?.trim();
-    if (!reply) return response.status(502).json({ error: 'The language model returned an empty response' });
 
     sessions.set(sessionId, [...history, { role: 'user', content: message }, { role: 'assistant', content: reply }].slice(-10));
     return response.json({ reply });
   } catch (error) {
     console.error('Chat request failed:', error.message);
-    return response.status(502).json({ error: 'Unable to reach the language model' });
+    return response.status(502).json({ error: 'Unable to generate a complete response right now. Please try again or ask a more focused question.' });
   }
 });
 

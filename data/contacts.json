@@ -1,0 +1,30 @@
+[
+  {
+    "id": "dsp-cyber",
+    "name": "DSP Cyber, Chandigarh Police",
+    "role": "Sh. Patil Swagat Rajkumar, DANIPS",
+    "phone": "9850958885",
+    "description": "The contact number is not currently available."
+  },
+  {
+    "id": "sho-cyber",
+    "name": "SHO Cyber, Chandigarh Police",
+    "role": "Sh. Davinder Singh, Inspector",
+    "phone": "9779946460",
+    "description": "The contact number is not currently available."
+  },
+  {
+    "id": "cyber-helpline",
+    "name": "National Cyber Crime Helpline",
+    "role": "Report financial cyber fraud",
+    "phone": "1930",
+    "description": "Call immediately for financial cyber fraud."
+  },
+  {
+    "id": "emergency",
+    "name": "Emergency services",
+    "role": "Immediate danger or urgent help",
+    "phone": "112",
+    "description": "Use for immediate emergency assistance."
+  }
+]

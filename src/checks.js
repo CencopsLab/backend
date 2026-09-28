@@ -89,7 +89,8 @@ async function checkEmail(value, options = {}) {
   const reasons = [];
   const emailMatch = value.trim().match(/^[^\s@]+@([^\s@]+)$/);
   const domain = emailMatch?.[1]?.toLowerCase();
-  const lookup = options.lookup ?? dns.lookup;
+  const mxLookup = options.mxLookup ?? (options.lookup ? null : dns.resolveMx);
+  const addressLookup = options.lookup ?? options.addressLookup ?? dns.lookup;
 
   if (!domain || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i.test(domain)) {
     addCheck('Email address format', true, 'Enter a complete email address with a domain, such as name@example.com.');
@@ -100,17 +101,40 @@ async function checkEmail(value, options = {}) {
     });
   }
 
-  let domainExists = true;
-  try {
-    await lookup(domain);
-  } catch {
-    domainExists = false;
-    reasons.push(`the sender domain ${domain} could not be found`);
+  let domainExists = null;
+  let mxRecordsFound = false;
+  let mxLookupUnavailable = false;
+  if (mxLookup) {
+    try {
+      const mxRecords = await mxLookup(domain);
+      mxRecordsFound = Array.isArray(mxRecords) && mxRecords.length > 0;
+      if (mxRecordsFound) domainExists = true;
+    } catch (error) {
+      // Fall back to address records because some domains use implicit MX.
+      mxLookupUnavailable = !['ENOTFOUND', 'ENODATA', 'EAI_NONAME', 'ENOTIMP'].includes(error?.code);
+    }
   }
 
-  addCheck('Sender domain', !domainExists, domainExists
-    ? `The domain ${domain} resolves on the internet.`
-    : `The domain ${domain} does not resolve on the internet.`);
+  if (!mxRecordsFound) {
+    try {
+      await addressLookup(domain);
+      domainExists = true;
+    } catch (error) {
+      const definitiveDnsErrors = new Set(['ENOTFOUND', 'ENODATA', 'EAI_NONAME', 'ENOTIMP']);
+      if (definitiveDnsErrors.has(error?.code) && !mxLookupUnavailable) domainExists = false;
+    }
+  }
+
+  if (domainExists === false) {
+    reasons.push(`the sender domain ${domain} could not be found`);
+    addCheck('Sender domain', true, `The domain ${domain} has no mail or address records.`);
+  } else if (domainExists === null) {
+    checks.push({ name: 'Sender domain', status: 'unavailable', detail: `The domain ${domain} could not be checked because DNS lookup is temporarily unavailable.` });
+  } else {
+    addCheck('Sender domain', false, mxRecordsFound
+      ? `The domain ${domain} has mail-server records.`
+      : `The domain ${domain} resolves to an address.`);
+  }
   const hasPressureOrRewardLanguage = /(urgent|immediately|suspended|verify|winner|prize|refund|payment)/i.test(value);
   const requestsSensitiveInformation = /(password|otp|one[- ]?time password|cvv|card|bank)/i.test(value);
   const containsLink = /(bit\.ly|tinyurl\.com|t\.co|https?:\/\/)/i.test(value);
@@ -129,9 +153,13 @@ async function checkEmail(value, options = {}) {
   addCheck('Sensitive information terms', requestsSensitiveInformation, requestsSensitiveInformation ? 'Terms related to credentials or financial information were found.' : 'No listed credential or financial-information terms were found.');
   addCheck('Links requiring verification', containsLink, containsLink ? 'A link was found; verify its destination independently.' : 'No recognized link was found.');
 
-  return reasons.length
-    ? result('suspicious', `Preliminary warning: ${reasons.join(', ')}. Verify the sender through an official channel.`, value, { checks, scanType: 'email', guidance: userGuidance('suspicious', reasons.map((reason) => `The message contains ${reason}.`), 'These are common signs of impersonation or phishing, but they do not prove who sent the message.', ['Do not reply, click links, or share OTPs or payment details.', 'Verify the sender through the organisation\'s official channel.']) })
-    : result('safe', 'The email domain exists and no obvious phishing signal was found.', value, { checks, scanType: 'email', guidance: userGuidance('safe', [`The sender domain ${domain} exists.`], 'This email looks legitimate based on the domain check, but a real domain can still be used for fraud or impersonation.', ['Do not share OTPs, passwords, or payment details until you trust the sender and context.']) });
+  if (reasons.length) {
+    return result('suspicious', `Preliminary warning: ${reasons.join(', ')}. Verify the sender through an official channel.`, value, { checks, scanType: 'email', guidance: userGuidance('suspicious', reasons.map((reason) => `The message contains ${reason}.`), 'These are common signs of impersonation or phishing, but they do not prove who sent the message.', ['Do not reply, click links, or share OTPs or payment details.', 'Verify the sender through the organisation\'s official channel.']) });
+  }
+  if (domainExists === null) {
+    return result('unknown', 'The email domain could not be checked right now. Try again when DNS or internet access is available.', value, { checks, scanType: 'email', guidance: userGuidance('unknown', ['The live domain lookup was unavailable.'], 'No conclusion can be made about the sender domain or the email.', ['Retry the scan or verify the sender using an official contact method.']) });
+  }
+  return result('safe', 'The email domain has mail or address records and no obvious phishing signal was found. This does not verify the sender.', value, { checks, scanType: 'email', guidance: userGuidance('safe', [`The sender domain ${domain} has ${mxRecordsFound ? 'mail-server' : 'address'} records.`], 'A real domain can still be used for fraud or impersonation; DNS does not authenticate the sender.', ['Do not share OTPs, passwords, or payment details until you trust the sender and context.']) });
 }
 
 function parseSmsHeader(input) {
@@ -205,7 +233,7 @@ function checkSms(input) {
     registeredHeader ? 'pass' : 'warning',
     registeredHeader
       ? 'The header was found in the supplied sms_header.json data. This is not live TRAI/DLT verification.'
-      : 'No matching header was found in the supplied sms_header.json data.'
+      : 'No matching header was found .'
   );
 
   if (parsed.tspCode) {
@@ -246,11 +274,21 @@ function checkSms(input) {
     category,
   };
 
+  const hasMetadataWarning = checks.some((check) => check.status === 'warning');
+  const hasCompleteMetadata = Boolean(parsed.tspCode && parsed.lsaCode && parsed.categoryCode);
+  const verdict = !registeredHeader || hasMetadataWarning
+    ? 'suspicious'
+    : hasCompleteMetadata
+      ? 'safe'
+      : 'likely_safe';
+
   return result(
-    'unknown',
-    registeredHeader
-      ? 'Header lookup complete. A supplied-data match does not confirm the live sender or message authenticity.'
-      : 'Header lookup complete. No supplied-data match was found; this does not by itself prove fraud.',
+    verdict,
+    verdict === 'suspicious'
+      ? 'The header has a format or reference-data warning. This does not prove fraud; live sender identity is not checked.'
+      : verdict === 'safe'
+        ? 'The header and supplied provider, area, and category data match. This does not confirm the live sender or message authenticity.'
+        : 'The header matches supplied reference data, but some optional metadata was not provided. The live sender is not verified.',
     parsed.originalHeader,
     { checks, headerDetails }
   );
@@ -322,7 +360,7 @@ function checkMobile(value) {
   );
 }
 
-async function checkFile(file) {
+async function checkFile(file, options = {}) {
   const name = file.originalname || 'uploaded file';
   const extension = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
   const allowed = new Set(['apk', 'pdf', 'zip', 'jpg', 'jpeg', 'png', 'webp']);
@@ -333,8 +371,10 @@ async function checkFile(file) {
 
   if (extension === 'apk') {
     try {
-      const permissions = await inspectApkPermissions(file.buffer);
-      const permissionAssessment = await assessApkPermissions(permissions);
+      const inspectPermissions = options.inspectApkPermissions ?? inspectApkPermissions;
+      const assessPermissions = options.assessApkPermissions ?? assessApkPermissions;
+      const permissions = await inspectPermissions(file.buffer);
+      const permissionAssessment = await assessPermissions(permissions);
       return result(
         permissionAssessment.verdict,
         `${permissions.length} app access request${permissions.length === 1 ? '' : 's'} found. Access requests alone do not prove fraud.`,

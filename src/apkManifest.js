@@ -15,12 +15,20 @@ async function inspectApkPermissions(buffer) {
   try {
     await fs.writeFile(apkPath, buffer);
     await execFileAsync(process.env.PYTHON_BIN || 'python', [decoderPath, apkPath], {
-      timeout: 120000,
+      timeout: Number(process.env.APK_MANIFEST_TIMEOUT_MS || 10 * 60 * 1000),
       maxBuffer: 2 * 1024 * 1024,
       windowsHide: true,
     });
 
-    const manifest = await fs.readFile(decodedPath, 'utf8');
+    let manifest;
+    try {
+      manifest = await fs.readFile(decodedPath, 'utf8');
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        throw new Error('Could not read AndroidManifest.xml: decoded manifest file was not created', { cause: error });
+      }
+      throw error;
+    }
     const permissions = [];
     const permissionPattern = /<uses-permission(?:-sdk-\d+)?\b[\s\S]*?\bname="([^"]+)"[\s\S]*?>/g;
     let match;
