@@ -58,7 +58,9 @@ async function requestChatReply({
   const rewriteResult = await complete(rewriteMessages);
 
   if (rewriteResult.finishReason === 'length') {
-    throw new Error('The concise rewrite still exceeded the output limit');
+    const error = new Error('The concise rewrite still exceeded the output limit');
+    error.code = 'INCOMPLETE_CHAT_RESPONSE';
+    throw error;
   }
 
   return rewriteResult.content.trim();

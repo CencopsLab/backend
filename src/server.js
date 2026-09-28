@@ -5,7 +5,7 @@ const express = require('express');
 const multer = require('multer');
 const { SYSTEM_PROMPT } = require('./prompt');
 const { requestChatReply } = require('./chatCompletion');
-const { greetingReply, isCyberRelated, isGreeting, outOfScopeReply } = require('./chatScope');
+const { greetingReply, incompleteAnswerReply, isCyberRelated, isGreeting, outOfScopeReply } = require('./chatScope');
 const { checkFile, runTextCheck } = require('./checks');
 const { reviewUrlWithGroq } = require('./urlAssessment');
 const contacts = require('../data/contacts.json');
@@ -79,6 +79,11 @@ app.post('/api/chat', async (request, response) => {
     sessions.set(sessionId, [...history, { role: 'user', content: message }, { role: 'assistant', content: reply }].slice(-10));
     return response.json({ reply });
   } catch (error) {
+    if (error.code === 'INCOMPLETE_CHAT_RESPONSE') {
+      const reply = incompleteAnswerReply(message, language);
+      sessions.set(sessionId, [...history, { role: 'user', content: message }, { role: 'assistant', content: reply }].slice(-10));
+      return response.json({ reply });
+    }
     console.error('Chat request failed:', error.message);
     return response.status(502).json({ error: 'Unable to generate a complete response right now. Please try again or ask a more focused question.' });
   }

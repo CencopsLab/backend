@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { greetingReply, isCyberRelated, isGreeting, outOfScopeReply } = require('../src/chatScope');
+const { greetingReply, incompleteAnswerReply, isCyberRelated, isGreeting, outOfScopeReply } = require('../src/chatScope');
 
 test('recognizes standalone greetings and courtesies', () => {
   for (const message of ['hi', 'hellooo!', 'hey there', 'good morning', 'thank you', 'नमस्ते', 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ']) {
@@ -50,4 +50,13 @@ test('provides an out-of-scope message in the selected language', () => {
   assert.match(outOfScopeReply('hi'), /साइबर सुरक्षा/);
   assert.match(outOfScopeReply('pa'), /ਸਾਇਬਰ ਸੁਰੱਖਿਆ/);
   assert.equal(outOfScopeReply('unknown'), outOfScopeReply('en'));
+});
+
+test('provides complete account-recovery steps if an email compromise answer is truncated', () => {
+  const reply = incompleteAnswerReply('my name is abc and my email abc@gmail.com is hacked..what to do', 'en');
+
+  assert.match(reply, /change its password/);
+  assert.match(reply, /Sign out other sessions/);
+  assert.match(reply, /Turn on MFA/);
+  assert.match(reply, /Never share OTPs or recovery codes/);
 });

@@ -77,7 +77,7 @@ test('rewrites a Markdown table for a compact mobile answer even when generation
   assert.match(requests[1].messages.at(-1).content, /3-5 short bullet points, not a table/);
 });
 
-test('does not return an answer if the concise rewrite is still truncated', async () => {
+test('identifies a rewrite that is still truncated so the route can return a safe fallback', async () => {
   let requestCount = 0;
   await assert.rejects(
     requestChatReply({
@@ -91,7 +91,7 @@ test('does not return an answer if the concise rewrite is still truncated', asyn
         return mockResponse('An incomplete answer', 'length');
       },
     }),
-    /rewrite still exceeded/,
+    (error) => error.code === 'INCOMPLETE_CHAT_RESPONSE',
   );
   assert.equal(requestCount, 2);
 });
