@@ -4,10 +4,13 @@ const cors = require('cors');
 const express = require('express');
 const multer = require('multer');
 const { SYSTEM_PROMPT } = require('./prompt');
-const { requestChatReply } = require('./chatCompletion');
+const { requestChatReply, translateChatReply } = require('./chatCompletion');
 const { greetingReply, incompleteAnswerReply, isCyberRelated, isGreeting, outOfScopeReply } = require('./chatScope');
 const { checkFile, runTextCheck } = require('./checks');
 const { reviewUrlWithGroq } = require('./urlAssessment');
+const { createRateLimiters } = require('./rateLimits');
+const { SCAM_TYPES, checkAnswer, sampleQuestions } = require('./quiz');
+const { TRANSLATIONS: QUIZ_TRANSLATIONS } = require('./quizTranslations');
 const contacts = require('../data/contacts.json');
 
 const app = express();
@@ -17,6 +20,11 @@ const maxTokens = Number(process.env.GROQ_MAX_TOKENS || 768);
 const temperature = Number(process.env.GROQ_TEMPERATURE || 0.2);
 const groqModel = String(process.env.GROQ_MODEL || '').trim();
 const sessions = new Map();
+const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS || 0);
+if (!Number.isSafeInteger(trustProxyHops) || trustProxyHops < 0) {
+  throw new Error('TRUST_PROXY_HOPS must be a non-negative integer');
+}
+const rateLimiters = createRateLimiters();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 150 * 1024 * 1024 },
@@ -24,6 +32,8 @@ const upload = multer({
 
 const allowedOrigins = (process.env.CORS_ORIGIN || '*').split(',').map((origin) => origin.trim());
 app.use(cors({ origin: allowedOrigins.includes('*') ? true : allowedOrigins }));
+app.set('trust proxy', trustProxyHops);
+app.use('/api', rateLimiters.api);
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', (_request, response) => {
@@ -34,7 +44,36 @@ app.get('/api/contacts', (_request, response) => {
   response.json(contacts);
 });
 
-app.post('/api/chat', async (request, response) => {
+app.get('/api/quiz', rateLimiters.scan, (request, response) => {
+  const type = typeof request.query.type === 'string' ? request.query.type : '';
+  const language = ['en', 'hi', 'pa'].includes(request.query.language) ? request.query.language : 'en';
+  const questions = sampleQuestions(type, language);
+  if (!questions) {
+    return response.status(400).json({ error: `type must be one of: ${Object.keys(SCAM_TYPES).join(', ')}` });
+  }
+  return response.json({
+    type,
+    label: QUIZ_TRANSLATIONS[language]?.[type]?.label || SCAM_TYPES[type].label,
+    questionCount: questions.length,
+    questions,
+  });
+});
+
+app.post('/api/quiz/answer', rateLimiters.scan, (request, response) => {
+  const { type, questionId, answerIndex } = request.body || {};
+  if (typeof type !== 'string' || !Object.hasOwn(SCAM_TYPES, type)) {
+    return response.status(400).json({ error: `type must be one of: ${Object.keys(SCAM_TYPES).join(', ')}` });
+  }
+  if (typeof questionId !== 'string' || !Number.isSafeInteger(answerIndex) || answerIndex < 0 || answerIndex > 3) {
+    return response.status(400).json({ error: 'Provide a questionId and an answerIndex from 0 to 3' });
+  }
+  const language = ['en', 'hi', 'pa'].includes(request.body.language) ? request.body.language : 'en';
+  const result = checkAnswer(type, questionId, answerIndex, language);
+  if (!result) return response.status(404).json({ error: 'Quiz question not found for this scam type' });
+  return response.json(result);
+});
+
+app.post('/api/chat', rateLimiters.chat, async (request, response) => {
   const message = typeof request.body?.message === 'string' ? request.body.message.trim() : '';
   const sessionId = typeof request.body?.session_id === 'string' ? request.body.session_id : 'anonymous';
   const language = ['en', 'hi', 'pa'].includes(request.body?.language) ? request.body.language : 'en';
@@ -89,7 +128,35 @@ app.post('/api/chat', async (request, response) => {
   }
 });
 
-app.post('/api/scan', upload.single('file'), async (request, response) => {
+app.post('/api/chat/translate', rateLimiters.translate, async (request, response) => {
+  const text = typeof request.body?.text === 'string' ? request.body.text.trim() : '';
+  const language = ['en', 'hi', 'pa'].includes(request.body?.language) ? request.body.language : null;
+  if (!text || text.length > 10000 || !language) {
+    return response.status(400).json({ error: 'Provide chat text (maximum 10000 characters) and a supported language' });
+  }
+  if (!process.env.GROQ_API_KEY || !groqModel) {
+    return response.status(503).json({ error: 'Chat translation is not configured on the backend' });
+  }
+  try {
+    const translation = await translateChatReply({
+      apiKey: process.env.GROQ_API_KEY,
+      model: groqModel,
+      text,
+      language,
+    });
+    return response.json({ translation });
+  } catch (error) {
+    console.error('Chat translation failed:', error.message);
+    return response.status(502).json({ error: 'Unable to translate the previous reply right now.' });
+  }
+});
+
+app.post('/api/scan', rateLimiters.scan, (request, response, next) => {
+  if (/^multipart\/form-data\b/i.test(request.get('content-type') || '')) {
+    return rateLimiters.apkUpload(request, response, next);
+  }
+  return next();
+}, upload.single('file'), async (request, response) => {
   if (request.file) return response.json(await checkFile(request.file));
 
   const type = typeof request.body?.type === 'string' ? request.body.type : '';
