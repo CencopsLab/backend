@@ -2,18 +2,27 @@ require('dotenv/config');
 
 const cors = require('cors');
 const express = require('express');
+const fs = require('node:fs');
+const path = require('node:path');
 const multer = require('multer');
+const swaggerUi = require('swagger-ui-express');
+const basicAuth = require('express-basic-auth');
+const YAML = require('yaml');
 const { SYSTEM_PROMPT } = require('./prompt');
 const { requestChatReply, translateChatReply } = require('./chatCompletion');
 const { greetingReply, incompleteAnswerReply, isCyberRelated, isGreeting, outOfScopeReply } = require('./chatScope');
 const { checkFile, runTextCheck } = require('./checks');
-const { reviewUrlWithGroq } = require('./urlAssessment');
+const { applyLookupPriority, assessUrl } = require('./urlAssessment');
+const { lookupUrl } = require('./urlLookup');
 const { createRateLimiters } = require('./rateLimits');
 const { SCAM_TYPES, checkAnswer, sampleQuestions } = require('./quiz');
 const { TRANSLATIONS: QUIZ_TRANSLATIONS } = require('./quizTranslations');
 const contacts = require('../data/contacts.json');
 
 const app = express();
+const openApiDocument = YAML.parse(
+  fs.readFileSync(path.join(__dirname, '..', 'openapi.yaml'), 'utf8'),
+);
 const port = Number(process.env.PORT || 8000);
 const requestTimeoutMs = Number(process.env.REQUEST_TIMEOUT_MS || 0);
 const maxTokens = Number(process.env.GROQ_MAX_TOKENS || 768);
@@ -33,6 +42,13 @@ const upload = multer({
 const allowedOrigins = (process.env.CORS_ORIGIN || '*').split(',').map((origin) => origin.trim());
 app.use(cors({ origin: allowedOrigins.includes('*') ? true : allowedOrigins }));
 app.set('trust proxy', trustProxyHops);
+app.get('/api-docs.json', (_request, response) => {
+  response.json(openApiDocument);
+});
+app.use('/api-docs', basicAuth({
+    users: { 'admin': 'admin' },
+    challenge: true, // Prompts the browser for a login dialog
+  }),swaggerUi.serve, swaggerUi.setup(openApiDocument));
 app.use('/api', rateLimiters.api);
 app.use(express.json({ limit: '1mb' }));
 
@@ -166,7 +182,16 @@ app.post('/api/scan', rateLimiters.scan, (request, response, next) => {
 
   if (url) {
     if (url.length > 2048) return response.status(400).json({ error: 'URL must be 2048 characters or fewer' });
-    return response.json(await reviewUrlWithGroq(url));
+    const [urlAssessment, urlLookup] = await Promise.all([
+      assessUrl(url),
+      lookupUrl(url),
+    ]);
+    const assessment = applyLookupPriority(urlAssessment, urlLookup);
+    return response.json({
+      ...assessment,
+      summary: `${assessment.summary} ${urlLookup.detail}`,
+      urlLookup,
+    });
   }
   if (type === 'sms') {
     if (!header || header.length > 64) {

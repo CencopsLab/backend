@@ -3,65 +3,85 @@ const test = require('node:test');
 const { checkFile, checkUrl, parseSmsHeader, runTextCheck } = require('../src/checks');
 const { assessApkPermissions } = require('../src/apkAssessment');
 const { extractManifestPermissions } = require('../src/apkManifest');
-const { reviewUrlWithGroq } = require('../src/urlAssessment');
+const { applyLookupPriority, assessUrl } = require('../src/urlAssessment');
 
-function mockGroqResponse(score, reason) {
-  return async (_url, options) => {
-    assert.match(options.headers.Authorization, /^Bearer test-key$/);
-    return {
-      ok: true,
-      json: async () => ({
-        choices: [{ message: { content: JSON.stringify({ risk_score: score, reason }) } }],
-      }),
-    };
-  };
-}
-
-test('adds a validated Groq review for a URL with no visible warning signals', async () => {
-  const result = await reviewUrlWithGroq('https://example.com', {
-    apiKey: 'test-key',
-    model: 'test-model',
-    fetchImpl: mockGroqResponse(12, 'No obvious deceptive pattern appears in the URL.'),
-  });
+test('uses local findings, score, and explanation for URLs without warning signals', () => {
+  const result = assessUrl('https://innefu.com');
 
   assert.equal(result.urlAssessment.status, 'available');
-  assert.equal(result.urlAssessment.riskScore, 12);
+  assert.equal(result.urlAssessment.riskScore, 0);
   assert.equal(result.urlAssessment.recommendation, 'no_obvious_risk');
-  assert.match(result.summary, /not confirmation that the site is safe/);
+  assert.match(result.urlAssessment.reason, /No listed warning pattern/);
+  assert.doesNotMatch(result.urlAssessment.reason, /random string|phishing/i);
+  assert.match(result.summary, /0\/100/);
 });
 
-test('deterministic URL warning signals prevent a low Groq score from minimizing risk', async () => {
-  const result = await reviewUrlWithGroq('http://bit.ly/urgent', {
-    apiKey: 'test-key',
-    model: 'test-model',
-    fetchImpl: mockGroqResponse(8, 'The short link obscures its destination.'),
-  });
+test('repeated URL assessments have the same local score and explanation', () => {
+  const firstResult = assessUrl('https://example.com');
+  const secondResult = assessUrl('https://example.com');
+
+  assert.equal(firstResult.urlAssessment.riskScore, secondResult.urlAssessment.riskScore);
+  assert.equal(firstResult.urlAssessment.recommendation, secondResult.urlAssessment.recommendation);
+  assert.equal(firstResult.urlAssessment.reason, secondResult.urlAssessment.reason);
+});
+
+test('deterministic URL warning signals determine the score and explanation', () => {
+  const result = assessUrl('http://bit.ly/urgent');
 
   assert.equal(result.urlAssessment.riskScore, 70);
   assert.equal(result.urlAssessment.recommendation, 'avoid');
   assert.equal(result.verdict, 'suspicious');
+  assert.match(result.urlAssessment.reason, /shortener|HTTPS/i);
 });
 
-test('returns a deterministic result when Groq is not configured', async () => {
-  let requestSent = false;
-  const result = await reviewUrlWithGroq('https://example.com', {
-    apiKey: '',
-    model: 'test-model',
-    fetchImpl: async () => { requestSent = true; },
-  });
-
-  assert.equal(requestSent, false);
-  assert.equal(result.urlAssessment.status, 'unavailable');
-  assert.equal(result.checks.find((check) => check.name === 'HTTPS connection').status, 'pass');
-});
-
-test('preserves a hosting-platform caution when AI URL review is unavailable', async () => {
-  const result = await reviewUrlWithGroq('https://abc.onrender.com', { apiKey: '', model: '' });
+test('preserves a hosting-platform caution using local URL checks', () => {
+  const result = assessUrl('https://abc.onrender.com');
 
   assert.equal(result.verdict, 'caution');
   assert.equal(result.urlAssessment.recommendation, 'caution');
   assert.equal(result.urlAssessment.riskScore, 25);
-  assert.match(result.summary, /Render/);
+  assert.match(result.urlAssessment.reason, /Render/);
+});
+
+test('raises URL risk to at least 80 when live lookup cannot find the domain or page', () => {
+  const result = applyLookupPriority(assessUrl('https://example.com'), {
+    status: 'not_found',
+    domainExists: true,
+    httpStatus: 404,
+    detail: 'The requested page could not be found.',
+  });
+
+  assert.equal(result.riskScore, 80);
+  assert.equal(result.urlAssessment.riskScore, 80);
+  assert.equal(result.urlAssessment.recommendation, 'avoid');
+  assert.equal(result.verdict, 'suspicious');
+  assert.match(result.summary, /not proof of maliciousness/i);
+  assert.equal(result.guidance.verdict, 'suspicious');
+});
+
+test('does not lower an existing deterministic score when lookup is not found', () => {
+  const result = applyLookupPriority(assessUrl('http://user:pass@192.0.2.1:8080/urgent-login'), {
+    status: 'not_found',
+    domainExists: false,
+    httpStatus: null,
+    detail: 'The domain name could not be found in public DNS.',
+  });
+
+  assert.equal(result.riskScore, 100);
+  assert.equal(result.urlAssessment.riskScore, 100);
+});
+
+test('does not apply lookup priority when live lookup is unavailable', () => {
+  const assessment = assessUrl('https://example.com');
+  const result = applyLookupPriority(assessment, {
+    status: 'unavailable',
+    domainExists: null,
+    httpStatus: null,
+    detail: 'The destination could not be reached.',
+  });
+
+  assert.equal(result.riskScore, assessment.riskScore);
+  assert.equal(result.urlAssessment.recommendation, 'no_obvious_risk');
 });
 
 test('returns assessable URL signals for secure and suspicious addresses', () => {

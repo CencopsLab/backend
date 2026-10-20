@@ -179,7 +179,7 @@ function checkUrl(value) {
   addCheck('Suspicious URL wording', hasSuspiciousWording ? 'warning' : 'pass', hasSuspiciousWording ? 'The URL combines sign-in/security wording with urgency, account action, or a reward.' : 'No combined urgency and account-security wording was found.');
   addCheck('Non-standard port', hasNonStandardPort ? 'warning' : 'pass', hasNonStandardPort ? `The URL uses non-standard port ${port}. This is not proof of harm, but should be expected.` : 'No non-standard network port was specified.');
   addCheck('Unusually deep subdomain', hasDeepSubdomain ? 'info' : 'pass', hasDeepSubdomain ? 'The hostname has many subdomain levels; check which domain is actually registered.' : 'The hostname does not have an unusually large number of subdomain levels.');
-  addCheck('Live reputation and redirects', 'unavailable', 'No threat-intelligence database was queried, DNS safety was not checked, and redirect destinations were not followed.');
+  addCheck('Live threat reputation', 'unavailable', 'No threat-intelligence database was queried. The separate HTTP lookup checks reachability only, not whether a destination is safe.');
 
   const riskScore = urlRiskScore(checks, usesFreeHosting);
   const highRiskSignal = usesPrivateHost || usesCredentials || usesPunycode || hasSuspiciousWording;
@@ -195,10 +195,10 @@ function checkUrl(value) {
       ? usesFreeHosting && reasons.length === 0
         ? `This URL uses a ${hostingPlatform} hosting domain. Free/shared hosting is not proof of maliciousness, but verify who operates this specific site before trusting it.`
         : `Use caution: ${reasons.join('; ')}. This is not a confirmed malicious-site finding.`
-      : 'No listed warning pattern was found in the visible URL. Live reputation and the destination were not checked, so its safety could not be determined.';
+      : 'No listed warning pattern was found in the visible URL. Live threat reputation was not checked; basic link reachability does not establish safety.';
   const meaning = usesFreeHosting
     ? `The address uses hosting associated with ${hostingPlatform}. These platforms host legitimate sites as well as user-created sites, so the platform alone cannot establish whether this site is safe.`
-    : 'These indicators are based on the address only. The site was not opened, redirects were not followed, and no threat-intelligence source was queried.';
+    : 'These indicators are based on the address only. The separate live lookup checks HTTP reachability without downloading page content, and no threat-intelligence source was queried.';
   const actions = verdict === 'suspicious'
     ? ['Do not open it unless you can verify the destination independently.', 'Avoid entering passwords, payment information, or personal details.']
     : ['Verify the site and its operator through an independent, trusted source.', 'Do not enter sensitive information unless you have confirmed the destination.'];

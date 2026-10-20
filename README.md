@@ -30,6 +30,10 @@ The default rate-limit store is in memory and works only within one backend proc
 
 The repository root contains `render.yaml`. Create a Render Blueprint from the repository, then set `GROQ_API_KEY` as a secret on the service. Render runs `npm install` from this directory and starts the API with `npm start`; `PORT` is supplied by Render. Use `/health` as the service health check.
 
+## API documentation
+
+The OpenAPI 3 specification is in `openapi.yaml`. With the backend running locally, open `http://localhost:8000/api-docs` for Swagger UI or `http://localhost:8000/api-docs.json` for the JSON document. Update the `servers` URL in `openapi.yaml` to your deployed HTTPS URL when using Swagger UI against staging or production. The documentation endpoints are public; restrict access at the hosting layer if they should not be exposed.
+
 ## Endpoints
 
 - `GET /health`
@@ -43,7 +47,7 @@ The repository root contains `render.yaml`. Create a Render Blueprint from the r
 
 File uploads have no application-level request timeout so slow connections can finish. APK manifests are read from the APK ZIP archive and their Android binary XML is decoded in Node.js; no Python runtime or temporary files are required. Email domain checks query MX records on each request, falling back to address records for domains without MX records. DNS proves only that a domain has mail/address records; it cannot authenticate the sender.
 
-URL scans combine local URL-pattern checks with a Groq AI review of the URL string. The model does not browse the site, follow redirects, or check live domain reputation. Its 0-100 risk estimate is heuristic, not a calibrated probability; deterministic URL warnings impose a minimum score. Shorteners are flagged because they conceal destinations, while free-hosting domains are context only and are not treated as malicious by themselves. If Groq is unavailable, the API returns the deterministic checks and marks the AI review unavailable.
+URL scans calculate the risk score, recommendation, and explanation from deterministic URL-pattern checks; no AI provider is called for URL assessment. A live lookup result of not found (missing public DNS record or HTTP 404/410) raises the score to at least 80/100 and marks the result suspicious. This is a high-risk signal, not proof of maliciousness; other inconclusive lookup failures do not trigger this score override. The separate live lookup uses built-in Node.js DNS and HTTP modules (no paid service or added dependency), is bounded to five seconds, sends `HEAD` requests, uses a one-byte ranged `GET` only when `HEAD` is unsupported, and follows at most five redirects. It refuses private/local addresses, embedded URL credentials, and non-standard ports; it does not download page content or check threat reputation. The 0-100 risk estimate is heuristic, not a calibrated probability. Shorteners are flagged because they conceal destinations, while free-hosting domains are context only and are not treated as malicious by themselves.
 
 Chat scope is checked locally against cyber-awareness terms and context. Multiple spelling errors in a recognized English cybersecurity keyword may be tolerated when the intended keyword is sufficiently similar and unambiguous; the original message is passed to the chat model unchanged.
 

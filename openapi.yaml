@@ -1,0 +1,496 @@
+openapi: 3.0.3
+info:
+  title: CyberRakshak API
+  version: 1.0.0
+  description: |
+    API for CyberRakshak chat, awareness quizzes, contacts, and preliminary
+    cyber-safety checks. Scan results are guidance signals only; they do not
+    prove that a file, link, sender, or phone number is safe or malicious.
+servers:
+  - url: http://localhost:8000
+    description: Local development
+tags:
+  - name: Health
+  - name: Contacts
+  - name: Quiz
+  - name: Chat
+  - name: Scan
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Check whether the API process is responding
+      responses:
+        "200":
+          description: API is responding
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, service]
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  service:
+                    type: string
+                    example: CyberRakshak-backend
+  /api/contacts:
+    get:
+      tags: [Contacts]
+      summary: Get the contact list displayed by the app
+      responses:
+        "200":
+          description: Contact list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contact"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/quiz:
+    get:
+      tags: [Quiz]
+      summary: Get ten randomized questions for a quiz category
+      parameters:
+        - name: type
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/QuizType"
+        - name: language
+          in: query
+          required: false
+          description: Defaults to en when omitted or unsupported.
+          schema:
+            $ref: "#/components/schemas/Language"
+      responses:
+        "200":
+          description: Quiz questions; correct answers are withheld
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [type, label, questionCount, questions]
+                properties:
+                  type:
+                    $ref: "#/components/schemas/QuizType"
+                  label:
+                    type: string
+                  questionCount:
+                    type: integer
+                    example: 10
+                  questions:
+                    type: array
+                    minItems: 10
+                    maxItems: 10
+                    items:
+                      $ref: "#/components/schemas/QuizQuestion"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/quiz/answer:
+    post:
+      tags: [Quiz]
+      summary: Check a submitted answer for a quiz question
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, questionId, answerIndex]
+              properties:
+                type:
+                  $ref: "#/components/schemas/QuizType"
+                questionId:
+                  type: string
+                  example: link-1-1
+                answerIndex:
+                  type: integer
+                  minimum: 0
+                  maximum: 3
+                language:
+                  $ref: "#/components/schemas/Language"
+      responses:
+        "200":
+          description: Answer result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuizAnswer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/chat:
+    post:
+      tags: [Chat]
+      summary: Get a cyber-safety chat response
+      description: |
+        Replies to greetings and out-of-scope messages locally. Relevant chat
+        messages may be sent to the configured AI provider to generate a reply.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+                session_id:
+                  type: string
+                  description: Optional conversation identifier used for in-memory context.
+                language:
+                  $ref: "#/components/schemas/Language"
+      responses:
+        "200":
+          description: Chat response
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reply]
+                properties:
+                  reply:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "502":
+          $ref: "#/components/responses/UpstreamFailure"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/chat/translate:
+    post:
+      tags: [Chat]
+      summary: Translate a previous chat response
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text, language]
+              properties:
+                text:
+                  type: string
+                  minLength: 1
+                  maxLength: 10000
+                language:
+                  type: string
+                  enum: [en, hi, pa]
+      responses:
+        "200":
+          description: Translated text
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [translation]
+                properties:
+                  translation:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "502":
+          $ref: "#/components/responses/UpstreamFailure"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/scan:
+    post:
+      tags: [Scan]
+      summary: Run a preliminary text, URL, or file check
+      description: |
+        Submit one JSON scan request or a multipart file upload. URL scans may
+        call the configured AI provider and make a bounded reachability request
+        to the submitted URL. Do not submit private, internal, or one-time links.
+        File uploads are limited to 150 MiB. Results are not proof of safety or
+        maliciousness.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/UrlScanRequest"
+                - $ref: "#/components/schemas/TextScanRequest"
+                - $ref: "#/components/schemas/SmsScanRequest"
+            examples:
+              url:
+                summary: Check a URL
+                value:
+                  url: https://example.com
+              email:
+                summary: Check an email address
+                value:
+                  type: email
+                  value: sender@example.com
+              mobile:
+                summary: Check a phone number
+                value:
+                  type: mobile
+                  value: "+919876543210"
+              sms:
+                summary: Check an SMS sender header
+                value:
+                  type: sms
+                  header: ABCDEF
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Maximum size 150 MiB. APK permissions are inspected when possible; other supported formats may not have their contents analyzed.
+      responses:
+        "200":
+          description: Preliminary scan result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          description: Uploaded file exceeds the 150 MiB size limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "502":
+          $ref: "#/components/responses/UpstreamFailure"
+components:
+  schemas:
+    Language:
+      type: string
+      enum: [en, hi, pa]
+      default: en
+    QuizType:
+      type: string
+      enum: [link, email, sms, phone, file]
+    QuizQuestion:
+      type: object
+      required: [id, type, story, question, options]
+      properties:
+        id:
+          type: string
+          example: link-1-1
+        type:
+          $ref: "#/components/schemas/QuizType"
+        story:
+          type: string
+        question:
+          type: string
+        options:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            type: string
+    QuizAnswer:
+      type: object
+      required: [correct, correctAnswer, explanation]
+      properties:
+        correct:
+          type: boolean
+        correctAnswer:
+          type: string
+        explanation:
+          type: string
+    Contact:
+      type: object
+      required: [id, name, role, phone, description]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+        phone:
+          type: string
+        description:
+          type: string
+    UrlScanRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+    TextScanRequest:
+      type: object
+      required: [type, value]
+      properties:
+        type:
+          type: string
+          enum: [email, mobile]
+        value:
+          type: string
+          minLength: 1
+          maxLength: 10000
+    SmsScanRequest:
+      type: object
+      required: [type, header]
+      properties:
+        type:
+          type: string
+          enum: [sms]
+        header:
+          type: string
+          minLength: 1
+          maxLength: 64
+          example: ABCDEF
+    ScanResult:
+      type: object
+      description: Preliminary assessment. The exact fields depend on the scan type.
+      required: [verdict, summary, scannedTarget]
+      properties:
+        verdict:
+          type: string
+          enum: [safe, caution, suspicious, malicious, unknown, likely_safe]
+        summary:
+          type: string
+        scannedTarget:
+          type: string
+        scanType:
+          type: string
+          enum: [url, email, sms, mobile, file]
+        riskScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+        checks:
+          type: array
+          items:
+            type: object
+            required: [name, status, detail]
+            properties:
+              name:
+                type: string
+              status:
+                type: string
+                enum: [pass, warning, unavailable, info]
+              detail:
+                type: string
+        guidance:
+          type: object
+          properties:
+            findings:
+              type: array
+              items:
+                type: string
+            meaning:
+              type: string
+            actions:
+              type: array
+              items:
+                type: string
+            verdict:
+              type: string
+        urlAssessment:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [available, unavailable]
+            riskScore:
+              type: integer
+              nullable: true
+            recommendation:
+              type: string
+            reason:
+              type: string
+        urlLookup:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [reachable, not_found, unavailable]
+            domainExists:
+              type: boolean
+              nullable: true
+              description: Whether public DNS resolved a domain name. Null when this could not be determined or the URL uses an IP address.
+            httpStatus:
+              type: integer
+              nullable: true
+            detail:
+              type: string
+      additionalProperties: true
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        scope:
+          type: string
+        limit:
+          type: integer
+        windowMs:
+          type: integer
+      additionalProperties: true
+  responses:
+    BadRequest:
+      description: Invalid or missing request data
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Requested quiz question was not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimited:
+      description: Per-IP or operation-specific rate limit exceeded
+      headers:
+        Retry-After:
+          description: Seconds until requests may be retried
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    UpstreamFailure:
+      description: An external provider request failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ServiceUnavailable:
+      description: Required chat provider configuration is unavailable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
