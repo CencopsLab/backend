@@ -40,6 +40,30 @@ test('allows common cybersecurity and online safety topics', () => {
   }
 });
 
+test('routes India-specific scam-lure questions to the LLM', () => {
+  for (const message of [
+    'I received a challan sms...how to verify if its legal?',
+    'Is this e-challan APK safe?',
+    'I got an m-Parivahan link asking me to install an app.',
+    'Adani gas bill payment APK',
+    'IOCL LPG bill update message',
+    'HDFC credit card KYC update',
+    'SBI card blocked SMS',
+    'Axis bank verification SMS',
+    'PM kisaan yojna payment link',
+    'pension schemes KYC update message',
+    'PNB pension scheme verification',
+    'PM Kisan yojana link',
+    'loan app asking for contacts and photos',
+    'invitation card APK from an unknown number',
+    'Teen Patti gaming app asking for an APK install',
+    'electricity bill disconnection message',
+    'FASTag KYC update message',
+  ]) {
+    assert.equal(isCyberRelated(message), true, message);
+  }
+});
+
 test('recognizes cyber questions with one or more keyword spelling mistakes', () => {
   for (const message of [
     'How do I identify a phising email?',
