@@ -1,7 +1,7 @@
-require('dotenv/config');
-// require('dotenv').config({
-//   path: '/home/ubuntu/cyber_rakshak_be/backend/src/.env'
-// });
+// require('dotenv/config');
+require('dotenv').config({
+  path: '/home/ubuntu/cyber_rakshak_be/backend/src/.env'
+});
 const cors = require('cors');
 const express = require('express');
 const fs = require('node:fs');
