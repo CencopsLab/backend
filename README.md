@@ -1,6 +1,6 @@
-# CyberRakshak backend
+# Cyber Sahayak backend
 
-Node.js API for the mobile app's focused cyber-safety chat and preliminary scan checks.
+Node.js API for Cyber Sahayak's focused cyber-safety chat and preliminary scan checks.
 
 ## Setup
 
@@ -10,7 +10,7 @@ npm install
 Copy-Item .env.example .env
 ```
 
-Set `GROQ_API_KEY` and `GROQ_MODEL` in `backend/.env`. The key stays on this server and is never bundled into the app.
+Set `GROQ_API_KEY` and `GROQ_MODEL` in `.env`. The key stays on this server and is never bundled into the app.
 
 Start the API:
 
@@ -18,7 +18,7 @@ Start the API:
 npm run dev
 ```
 
-The Android emulator reaches the host machine through `http://10.0.2.2:8000`. Set the app's `API_BASE_URL` to that address. A physical device should use the computer's LAN IP instead. For a release APK, use the deployed Render HTTPS URL instead.
+The Android emulator reaches the host machine through `http://10.0.2.2:8000`. Set the app's `API_BASE_URL` to that address. A physical device should use the computer's LAN IP instead. For a release build, use the deployed HTTPS URL instead.
 
 ## API rate limits
 
@@ -41,9 +41,24 @@ The OpenAPI 3 specification is in `openapi.yaml`. With the backend running local
 - `GET /api/quiz?type=link|email|sms|phone|file&language=en|hi|pa` returns ten random story questions from that scam type's 100-question inventory. Each question includes its localized story and answer choices; the correct answer is withheld.
 - `POST /api/quiz/answer` with `{ "type": "link", "questionId": "link-1-1", "answerIndex": 0, "language": "hi" }` checks one answer and returns whether it was correct, the localized correct choice, and an explanation.
 - `POST /api/chat` with `{ "message": "...", "session_id": "..." }`
+- `POST /api/scan/translate` translates generated scan-analysis text into Hindi or Punjabi. The submitted text is sent to the configured AI provider; it may contain details derived from scanned input. Uploaded files are not sent to this endpoint.
 - `POST /api/scan` with `{ "url": "..." }`
 - `POST /api/scan` with `{ "type": "email|mobile", "value": "..." }` or `{ "type": "sms", "header": "..." }`
 - `POST /api/scan` multipart with a `file` field (maximum 150 MB). APK responses include the declared Android `permissions` list.
+- Add `"language": "en"`, `"hi"`, or `"pa"` to any JSON scan request, or send `language` as a multipart field, to receive generated summaries, checks, and guidance in that language. English is the default. Hindi/Punjabi results require the backend's configured translation provider.
+- `POST /api/scan/translate` translates generated scan analysis for an already completed scan when the app language changes. Only result text is sent, never the uploaded file itself; generated text may include details derived from scanned content.
+
+Example Hindi email scan:
+
+```bash
+curl --location 'https://3.109.192.43/api/scan' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
+    "type": "email",
+    "value": "sender@example.com",
+    "language": "hi"
+  }'
+```
 
 File uploads have no application-level request timeout so slow connections can finish. APK manifests are read from the APK ZIP archive and their Android binary XML is decoded in Node.js; no Python runtime or temporary files are required. Email domain checks query MX records on each request, falling back to address records for domains without MX records. DNS proves only that a domain has mail/address records; it cannot authenticate the sender.
 

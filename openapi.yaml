@@ -1,14 +1,14 @@
 openapi: 3.0.3
 info:
-  title: CyberRakshak API
+  title: Cyber Sahayak API
   version: 1.0.0
   description: |
-    API for CyberRakshak chat, awareness quizzes, contacts, and preliminary
+    API for Cyber Sahayak chat, awareness quizzes, contacts, and preliminary
     cyber-safety checks. Scan results are guidance signals only; they do not
     prove that a file, link, sender, or phone number is safe or malicious.
 servers:
-  - url: http://localhost:8000
-    description: Local development
+  - url: /
+    description: Production server
 tags:
   - name: Health
   - name: Contacts
@@ -34,7 +34,7 @@ paths:
                     example: true
                   service:
                     type: string
-                    example: CyberRakshak-backend
+                    example: cyber-sahayak-backend
   /api/contacts:
     get:
       tags: [Contacts]
@@ -209,6 +209,68 @@ paths:
           $ref: "#/components/responses/UpstreamFailure"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/scan/translate:
+    post:
+      tags: [Scan]
+      summary: Translate generated scan analysis
+      description: |
+        Translates structured scan findings; uploaded files and raw target
+        fields are not directly included, but generated text may contain details
+        derived from the scanned content. Translation text is processed by the
+        configured AI provider. Do not submit sensitive content for scanning.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entries, language]
+              properties:
+                entries:
+                  type: array
+                  minItems: 1
+                  maxItems: 40
+                  items:
+                    type: object
+                    required: [id, text]
+                    properties:
+                      id:
+                        type: string
+                        pattern: "^[a-z][a-z0-9_]{0,63}$"
+                      text:
+                        type: string
+                        minLength: 1
+                        maxLength: 2000
+                language:
+                  type: string
+                  enum: [en, hi, pa]
+      responses:
+        "200":
+          description: Translated scan analysis entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [translations]
+                properties:
+                  translations:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, text]
+                      properties:
+                        id:
+                          type: string
+                        text:
+                          type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "502":
+          $ref: "#/components/responses/UpstreamFailure"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /api/scan:
     post:
       tags: [Scan]
@@ -218,7 +280,10 @@ paths:
         call the configured AI provider and make a bounded reachability request
         to the submitted URL. Do not submit private, internal, or one-time links.
         File uploads are limited to 150 MiB. Results are not proof of safety or
-        maliciousness.
+        maliciousness. Include `language` as `en`, `hi`, or `pa` to receive
+        all generated scan analysis text in that language; omitted language
+        defaults to English. Hindi and Punjabi results use the configured AI
+        translation provider.
       requestBody:
         required: true
         content:
@@ -248,6 +313,12 @@ paths:
                 value:
                   type: sms
                   header: ABCDEF
+              email_hindi:
+                summary: Check an email address and receive Hindi analysis
+                value:
+                  type: email
+                  value: sender@example.com
+                  language: hi
           multipart/form-data:
             schema:
               type: object
@@ -257,6 +328,8 @@ paths:
                   type: string
                   format: binary
                   description: Maximum size 150 MiB. APK permissions are inspected when possible; other supported formats may not have their contents analyzed.
+                language:
+                  $ref: "#/components/schemas/Language"
       responses:
         "200":
           description: Preliminary scan result
@@ -338,6 +411,8 @@ components:
           type: string
           format: uri
           maxLength: 2048
+        language:
+          $ref: "#/components/schemas/Language"
     TextScanRequest:
       type: object
       required: [type, value]
@@ -349,6 +424,8 @@ components:
           type: string
           minLength: 1
           maxLength: 10000
+        language:
+          $ref: "#/components/schemas/Language"
     SmsScanRequest:
       type: object
       required: [type, header]
@@ -361,11 +438,15 @@ components:
           minLength: 1
           maxLength: 64
           example: ABCDEF
+        language:
+          $ref: "#/components/schemas/Language"
     ScanResult:
       type: object
       description: Preliminary assessment. The exact fields depend on the scan type.
-      required: [verdict, summary, scannedTarget]
+      required: [verdict, summary, scannedTarget, language]
       properties:
+        language:
+          $ref: "#/components/schemas/Language"
         verdict:
           type: string
           enum: [safe, caution, suspicious, malicious, unknown, likely_safe]

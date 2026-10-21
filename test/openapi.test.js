@@ -17,8 +17,19 @@ test('OpenAPI document describes the backend routes', () => {
     '/api/quiz/answer',
     '/api/chat',
     '/api/chat/translate',
+    '/api/scan/translate',
     '/api/scan',
   ]);
   assert.ok(specification.paths['/api/scan'].post.requestBody.content['multipart/form-data']);
   assert.ok(specification.paths['/api/scan'].post.requestBody.content['application/json']);
+  assert.deepEqual(
+    specification.paths['/api/scan'].post.requestBody.content['application/json'].schema.oneOf
+      .map((schema) => schema.$ref.split('/').at(-1))
+      .map((schemaName) => specification.components.schemas[schemaName].properties.language.$ref),
+    Array(3).fill('#/components/schemas/Language'),
+  );
+  assert.deepEqual(
+    specification.paths['/api/scan/translate'].post.requestBody.content['application/json'].schema.properties.language.enum,
+    ['en', 'hi', 'pa'],
+  );
 });

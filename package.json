@@ -1,8 +1,8 @@
 {
-  "name": "CyberRakshak-backend",
+  "name": "cyber-sahayak-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "CyberRakshak chat and preliminary scan API",
+  "description": "Cyber Sahayak chat and preliminary scan API",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

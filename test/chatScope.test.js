@@ -14,7 +14,8 @@ test('does not treat a greeting followed by another request as a greeting-only m
 });
 
 test('provides a localized greeting without involving unrelated request handling', () => {
-  assert.match(greetingReply('en'), /Hi!/);
+  assert.match(greetingReply('en'), /Hi! I’m Cyber Sahayak\./);
+  assert.doesNotMatch(greetingReply('en'), /CyberRakshak/i);
   assert.match(greetingReply('hi'), /नमस्ते/);
   assert.match(greetingReply('pa'), /ਸਤ ਸ੍ਰੀ ਅਕਾਲ/);
   assert.equal(greetingReply('unknown'), greetingReply('en'));

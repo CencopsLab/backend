@@ -59,7 +59,7 @@ function requestHeaders(url, addresses, method, timeoutMs) {
       method,
       agent: false,
       headers: {
-        'User-Agent': 'CyberRakshak-Link-Lookup/1.0',
+        'User-Agent': 'Cyber-Sahayak-Link-Lookup/1.0',
         ...(method === 'GET' ? { Range: 'bytes=0-0' } : {}),
       },
       lookup: (_hostname, options, callback) => {

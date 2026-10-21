@@ -1,5 +1,7 @@
 require('dotenv/config');
-
+// require('dotenv').config({
+//   path: '/home/ubuntu/cyber_rakshak_be/backend/src/.env'
+// });
 const cors = require('cors');
 const express = require('express');
 const fs = require('node:fs');
@@ -9,7 +11,7 @@ const swaggerUi = require('swagger-ui-express');
 const basicAuth = require('express-basic-auth');
 const YAML = require('yaml');
 const { SYSTEM_PROMPT } = require('./prompt');
-const { requestChatReply, translateChatReply } = require('./chatCompletion');
+const { requestChatReply, translateChatReply, translateScanTexts, translateScanResult } = require('./chatCompletion');
 const { greetingReply, incompleteAnswerReply, isCyberRelated, isGreeting, outOfScopeReply } = require('./chatScope');
 const { checkFile, runTextCheck } = require('./checks');
 const { applyLookupPriority, assessUrl } = require('./urlAssessment');
@@ -46,14 +48,14 @@ app.get('/api-docs.json', (_request, response) => {
   response.json(openApiDocument);
 });
 app.use('/api-docs', basicAuth({
-    users: { 'admin': 'admin' },
+    users: { 'cyberadmin': 'CyberAdmin101' },
     challenge: true, // Prompts the browser for a login dialog
   }),swaggerUi.serve, swaggerUi.setup(openApiDocument));
 app.use('/api', rateLimiters.api);
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', (_request, response) => {
-  response.json({ ok: true, service: 'CyberRakshak-backend' });
+  response.json({ ok: true, service: 'cyber-sahayak-backend' });
 });
 
 app.get('/api/contacts', (_request, response) => {
@@ -167,13 +169,80 @@ app.post('/api/chat/translate', rateLimiters.translate, async (request, response
   }
 });
 
+app.post('/api/scan/translate', rateLimiters.translate, async (request, response) => {
+  const { entries } = request.body || {};
+  const language = ['en', 'hi', 'pa'].includes(request.body?.language) ? request.body.language : null;
+  if (
+    !language
+    || !Array.isArray(entries)
+    || entries.length < 1
+    || entries.length > 40
+    || entries.some((entry) => (
+      !entry
+      || typeof entry.id !== 'string'
+      || !/^[a-z][a-z0-9_]{0,63}$/.test(entry.id)
+      || typeof entry.text !== 'string'
+      || !entry.text.trim()
+      || entry.text.length > 2000
+    ))
+    || new Set(entries.map((entry) => entry.id)).size !== entries.length
+    || entries.reduce((total, entry) => total + entry.text.length, 0) > 12000
+  ) {
+    return response.status(400).json({ error: 'Provide 1-40 unique scan text entries and a supported target language (en, hi, or pa)' });
+  }
+  if (!process.env.GROQ_API_KEY || !groqModel) {
+    return response.status(503).json({ error: 'Scan translation is not configured on the backend' });
+  }
+  try {
+    const translations = await translateScanTexts({
+      apiKey: process.env.GROQ_API_KEY,
+      model: groqModel,
+      entries,
+      language,
+    });
+    return response.json({ translations });
+  } catch (error) {
+    console.error('Scan translation failed:', error.message);
+    return response.status(502).json({ error: 'Unable to translate scan analysis right now.' });
+  }
+});
+
 app.post('/api/scan', rateLimiters.scan, (request, response, next) => {
   if (/^multipart\/form-data\b/i.test(request.get('content-type') || '')) {
     return rateLimiters.apkUpload(request, response, next);
   }
   return next();
-}, upload.single('file'), async (request, response) => {
-  if (request.file) return response.json(await checkFile(request.file));
+}, upload.single('file'), (request, response, next) => {
+  if (request.body?.language === 'hi' || request.body?.language === 'pa') {
+    return rateLimiters.translate(request, response, next);
+  }
+  return next();
+}, async (request, response) => {
+  const requestedLanguage = request.body?.language;
+  if (requestedLanguage !== undefined && !['en', 'hi', 'pa'].includes(requestedLanguage)) {
+    return response.status(400).json({ error: 'language must be one of: en, hi, pa' });
+  }
+  const language = requestedLanguage || 'en';
+  const sendScanResult = async (result) => {
+    if (language === 'en') return response.json({ ...result, language });
+    if (!process.env.GROQ_API_KEY || !groqModel) {
+      return response.status(503).json({ error: 'Scan translation is not configured on the backend' });
+    }
+    try {
+      const translated = await translateScanResult({
+        apiKey: process.env.GROQ_API_KEY,
+        model: groqModel,
+        result,
+        language,
+      });
+      return response.json({ ...translated, language });
+    } catch (error) {
+      console.error('Scan result translation failed:', error.message);
+      return response.status(502).json({ error: 'Unable to translate scan results right now.' });
+    }
+  };
+
+  if (request.file) return sendScanResult(await checkFile(request.file));
 
   const type = typeof request.body?.type === 'string' ? request.body.type : '';
   const value = typeof request.body?.value === 'string' ? request.body.value.trim() : '';
@@ -187,7 +256,7 @@ app.post('/api/scan', rateLimiters.scan, (request, response, next) => {
       lookupUrl(url),
     ]);
     const assessment = applyLookupPriority(urlAssessment, urlLookup);
-    return response.json({
+    return sendScanResult({
       ...assessment,
       summary: `${assessment.summary} ${urlLookup.detail}`,
       urlLookup,
@@ -197,11 +266,11 @@ app.post('/api/scan', rateLimiters.scan, (request, response, next) => {
     if (!header || header.length > 64) {
       return response.status(400).json({ error: 'Provide an SMS header (maximum 64 characters)' });
     }
-    return response.json(runTextCheck(type, header));
+    return sendScanResult(runTextCheck(type, header));
   }
   if (type && value && value.length <= 10000) {
     const result = await runTextCheck(type, value);
-    if (result) return response.json(result);
+    if (result) return sendScanResult(result);
   }
 
   return response.status(400).json({ error: 'Provide a URL, file, or supported text check' });
@@ -216,7 +285,7 @@ app.use((error, _request, response, _next) => {
 });
 
 const server = app.listen(port, '0.0.0.0', () => {
-  console.log(`CyberRakshak backend listening on http://0.0.0.0:${port}`);
+  console.log(`Cyber Sahayak backend listening on http://0.0.0.0:${port}`);
 });
 server.timeout = requestTimeoutMs;
 server.requestTimeout = requestTimeoutMs;

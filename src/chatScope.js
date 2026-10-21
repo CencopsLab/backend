@@ -5,14 +5,14 @@ const SECURITY_ACTION = '(?:hack(?:ed|ing)?|compromis(?:ed|e)|breach(?:ed)?|stea
 const SECURITY_CONTEXT_PATTERN = new RegExp(`(?:${DIGITAL_OBJECT}).{0,45}(?:${SECURITY_ACTION})|(?:${SECURITY_ACTION}).{0,45}(?:${DIGITAL_OBJECT})`, 'i');
 const CYBER_TOPIC_PATTERNS = [DIRECT_CYBER_TOPIC_PATTERN, SOCIAL_ENGINEERING_PATTERN, SECURITY_CONTEXT_PATTERN];
 const FOLLOW_UP_PATTERN = /^(?:and|also|then|so|why|how|what about|can you explain|please explain|tell me more|what should i do|is it|does it|will it|can i|should i|what if|any other|which one|which|that|it|they|them)\b/i;
-const GREETING_PATTERN = /^(?:hi+|hello+|hey+|howdy|good morning|good afternoon|good evening|how are you|how's it going|thanks|thank you|bye|goodbye|नमस्ते|नमस्कार|हाय|ਸਤ ਸ੍ਰੀ ਅਕਾਲ|ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ|ਹੈਲੋ|ਧੰਨਵਾਦ)(?:\s+(?:there|cyberrakshak|assistant))?[!.,?\s]*$/i;
+const GREETING_PATTERN = /^(?:hi+|hello+|hey+|howdy|good morning|good afternoon|good evening|how are you|how's it going|thanks|thank you|bye|goodbye|नमस्ते|नमस्कार|हाय|ਸਤ ਸ੍ਰੀ ਅਕਾਲ|ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ|ਹੈਲੋ|ਧੰਨਵਾਦ)(?:\s+(?:there|cyber\s*sahayak|cybersahayak|assistant))?[!.,?\s]*$/i;
 const ACCOUNT_COMPROMISE_PATTERN = /\b(?:hack(?:ed)?|compromis(?:ed|e)|taken over|stolen|breached?)\b/i;
 const ACCOUNT_REFERENCE_PATTERN = /\b(?:account|email|e-mail|mailbox|inbox|profile)\b/i;
 
 const GREETING_REPLIES = {
-  en: 'Hi! I’m CyberRakshak. I can help with cybersecurity and online safety. What would you like to know?',
-  hi: 'नमस्ते! मैं CyberRakshak हूँ। मैं साइबर सुरक्षा और ऑनलाइन सुरक्षा में मदद कर सकता हूँ। आप क्या जानना चाहते हैं?',
-  pa: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ CyberRakshak ਹਾਂ। ਮੈਂ ਸਾਇਬਰ ਸੁਰੱਖਿਆ ਅਤੇ ਆਨਲਾਈਨ ਸੁਰੱਖਿਆ ਬਾਰੇ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ। ਤੁਸੀਂ ਕੀ ਜਾਣਨਾ ਚਾਹੁੰਦੇ ਹੋ?',
+  en: 'Hi! I’m Cyber Sahayak. I can help with cybersecurity and online safety. What would you like to know?',
+  hi: 'नमस्ते! मैं साइबर सहायक हूँ। मैं साइबर सुरक्षा और ऑनलाइन सुरक्षा में मदद कर सकता हूँ। आप क्या जानना चाहते हैं?',
+  pa: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ ਸਾਈਬਰ ਸਹਾਇਕ ਹਾਂ। ਮੈਂ ਸਾਇਬਰ ਸੁਰੱਖਿਆ ਅਤੇ ਆਨਲਾਈਨ ਸੁਰੱਖਿਆ ਬਾਰੇ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ। ਤੁਸੀਂ ਕੀ ਜਾਣਨਾ ਚਾਹੁੰਦੇ ਹੋ?',
 };
 
 const OUT_OF_SCOPE_REPLIES = {
