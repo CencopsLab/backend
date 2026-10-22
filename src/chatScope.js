@@ -17,6 +17,22 @@ const GREETING_REPLIES = {
   pa: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ ਸਾਈਬਰ ਸਹਾਇਕ ਹਾਂ। ਮੈਂ ਸਾਇਬਰ ਸੁਰੱਖਿਆ ਅਤੇ ਆਨਲਾਈਨ ਸੁਰੱਖਿਆ ਬਾਰੇ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ। ਤੁਸੀਂ ਕੀ ਜਾਣਨਾ ਚਾਹੁੰਦੇ ਹੋ?',
 };
 
+const GRM_NAME_PATTERN = /\b(?:grm|grievance redressal mechanism)\b/i;
+const GRM_RELATED_PATTERN = /(?:bank|account).{0,40}\b(?:lien|freeze|frozen|hold)\b|\b(?:lien|freeze|frozen|hold).{0,40}(?:bank|account)\b/i;
+const MRM_REFERENCE_PATTERN = /\b(?:mrm|money restoration (?:module|portal)|money restoration portal|restor(?:e|ation).{0,30}(?:frozen|held) funds)\b/i;
+const PORTAL_GUIDANCE_REPLIES = {
+  grm: {
+    en: 'GRM (Grievance Redressal Mechanism) is for seeking review of a bank-account freeze, lien, or hold connected to a cybercrime investigation. To resolve your query about the lien or retrieve your money, contact your respective bank.',
+    hi: 'GRM (Grievance Redressal Mechanism) साइबर अपराध की जांच से जुड़े बैंक खाते के फ्रीज़, लियन या होल्ड की समीक्षा के लिए है। लियन से जुड़ी समस्या सुलझाने या पैसे वापस पाने के लिए अपने बैंक से संपर्क करें।',
+    pa: 'GRM (Grievance Redressal Mechanism) ਸਾਇਬਰ ਅਪਰਾਧ ਦੀ ਜਾਂਚ ਨਾਲ ਜੁੜੇ ਬੈਂਕ ਖਾਤੇ ਦੇ ਫ੍ਰੀਜ਼, ਲੀਅਨ ਜਾਂ ਹੋਲਡ ਦੀ ਸਮੀਖਿਆ ਲਈ ਹੈ। ਲੀਅਨ ਦੀ ਸਮੱਸਿਆ ਹੱਲ ਕਰਨ ਜਾਂ ਪੈਸੇ ਵਾਪਸ ਲੈਣ ਲਈ ਆਪਣੇ ਬੈਂਕ ਨਾਲ ਸੰਪਰਕ ਕਰੋ।',
+  },
+  mrm: {
+    en: 'The Money Restoration Portal (MRM Portal), launched by the Ministry of Home Affairs through I4C, enables victims of online financial fraud to recover frozen funds digitally. Recovery is subject to verification and approval. For an update about your complaint, contact the respective cyber police station handling your case.',
+    hi: 'Money Restoration Portal (MRM Portal), गृह मंत्रालय द्वारा I4C के माध्यम से शुरू किया गया है और ऑनलाइन वित्तीय धोखाधड़ी के पीड़ितों को फ्रीज़ की गई राशि डिजिटल तरीके से वापस पाने में सहायता करता है। यह सत्यापन और मंज़ूरी पर निर्भर करता है। अपनी शिकायत की स्थिति जानने के लिए अपने मामले को संभाल रहे संबंधित साइबर पुलिस स्टेशन से संपर्क करें।',
+    pa: 'Money Restoration Portal (MRM Portal), ਗ੍ਰਹਿ ਮੰਤਰਾਲੇ ਵੱਲੋਂ I4C ਰਾਹੀਂ ਸ਼ੁਰੂ ਕੀਤਾ ਗਿਆ ਹੈ ਅਤੇ ਆਨਲਾਈਨ ਵਿੱਤੀ ਧੋਖਾਧੜੀ ਦੇ ਪੀੜਤਾਂ ਨੂੰ ਫ੍ਰੀਜ਼ ਕੀਤੀ ਰਕਮ ਡਿਜ਼ਿਟਲ ਤਰੀਕੇ ਨਾਲ ਵਾਪਸ ਲੈਣ ਵਿੱਚ ਮਦਦ ਕਰਦਾ ਹੈ। ਇਹ ਤਸਦੀਕ ਅਤੇ ਮਨਜ਼ੂਰੀ ਤੇ ਨਿਰਭਰ ਕਰਦਾ ਹੈ। ਆਪਣੀ ਸ਼ਿਕਾਇਤ ਬਾਰੇ ਅੱਪਡੇਟ ਲਈ ਆਪਣੇ ਕੇਸ ਨੂੰ ਦੇਖ ਰਹੇ ਸਾਇਬਰ ਪੁਲਿਸ ਸਟੇਸ਼ਨ ਨਾਲ ਸੰਪਰਕ ਕਰੋ।',
+  },
+};
+
 const OUT_OF_SCOPE_REPLIES = {
   en: 'I can only help with cybersecurity and online safety. Ask me about scams, account security, suspicious links, malware safety, or reporting cybercrime.',
   hi: 'मैं केवल साइबर सुरक्षा और ऑनलाइन सुरक्षा में मदद कर सकता हूँ। धोखाधड़ी, खाते की सुरक्षा, संदिग्ध लिंक, मैलवेयर से बचाव या साइबर अपराध की रिपोर्टिंग के बारे में पूछें।',
@@ -782,6 +798,15 @@ function isCyberRelated(message, history = []) {
   return recentCyberContext;
 }
 
+function portalGuidanceReply(message, language) {
+  const portal = MRM_REFERENCE_PATTERN.test(message)
+    ? 'mrm'
+    : GRM_NAME_PATTERN.test(message) || GRM_RELATED_PATTERN.test(message)
+      ? 'grm'
+      : null;
+  return portal ? PORTAL_GUIDANCE_REPLIES[portal][language] || PORTAL_GUIDANCE_REPLIES[portal].en : null;
+}
+
 function greetingReply(language) {
   return GREETING_REPLIES[language] || GREETING_REPLIES.en;
 }
@@ -797,4 +822,4 @@ function incompleteAnswerReply(message, language) {
   return INCOMPLETE_REPLIES[language] || INCOMPLETE_REPLIES.en;
 }
 
-module.exports = { greetingReply, incompleteAnswerReply, isCyberRelated, isGreeting, outOfScopeReply };
+module.exports = { greetingReply, incompleteAnswerReply, isCyberRelated, isGreeting, outOfScopeReply, portalGuidanceReply };

@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { greetingReply, incompleteAnswerReply, isCyberRelated, isGreeting, outOfScopeReply } = require('../src/chatScope');
+const { greetingReply, incompleteAnswerReply, isCyberRelated, isGreeting, outOfScopeReply, portalGuidanceReply } = require('../src/chatScope');
 
 test('recognizes standalone greetings and courtesies', () => {
   for (const message of ['hi', 'hellooo!', 'hey there', 'good morning', 'thank you', 'नमस्ते', 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ']) {
@@ -84,6 +84,31 @@ test('allows questions about the official cyber and telecom portals', () => {
   ]) {
     assert.equal(isCyberRelated(message), true, message);
   }
+});
+
+test('gives direct GRM and MRM guidance without relying on generated chat replies', () => {
+  for (const query of [
+    'What is the GRM portal?',
+    'My bank account has a lien because of a cyber complaint',
+  ]) {
+    const grmReply = portalGuidanceReply(query, 'en');
+    assert.match(grmReply, /bank-account freeze, lien, or hold/);
+    assert.match(grmReply, /contact your respective bank/);
+  }
+
+  for (const query of [
+    'What is MRM portal?',
+    'What is the Money Restoration Portal?',
+  ]) {
+    const mrmReply = portalGuidanceReply(query, 'en');
+    assert.match(mrmReply, /launched by the Ministry of Home Affairs through I4C/);
+    assert.match(mrmReply, /recover frozen funds digitally/);
+    assert.match(mrmReply, /contact the respective cyber police station handling your case/);
+  }
+
+  assert.equal(portalGuidanceReply('What does NCRP do?', 'en'), null);
+  assert.match(portalGuidanceReply('MRM पोर्टल क्या है?', 'hi'), /पुलिस स्टेशन से संपर्क करें/);
+  assert.match(portalGuidanceReply('GRM ਕੀ ਹੈ?', 'pa'), /ਆਪਣੇ ਬੈਂਕ ਨਾਲ ਸੰਪਰਕ ਕਰੋ/);
 });
 
 test('recognizes cyber questions with one or more keyword spelling mistakes', () => {

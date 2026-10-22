@@ -12,7 +12,7 @@ const basicAuth = require('express-basic-auth');
 const YAML = require('yaml');
 const { SYSTEM_PROMPT } = require('./prompt');
 const { requestChatReply, translateChatReply, translateScanTexts, translateScanResult } = require('./chatCompletion');
-const { greetingReply, incompleteAnswerReply, isCyberRelated, isGreeting, outOfScopeReply } = require('./chatScope');
+const { greetingReply, incompleteAnswerReply, isCyberRelated, isGreeting, outOfScopeReply, portalGuidanceReply } = require('./chatScope');
 const { checkFile, runTextCheck } = require('./checks');
 const { applyLookupPriority, assessUrl } = require('./urlAssessment');
 const { lookupUrl } = require('./urlLookup');
@@ -103,6 +103,11 @@ app.post('/api/chat', rateLimiters.chat, async (request, response) => {
 
   if (isGreeting(message)) {
     return response.json({ reply: greetingReply(language) });
+  }
+
+  const portalReply = portalGuidanceReply(message, language);
+  if (portalReply) {
+    return response.json({ reply: portalReply });
   }
 
   const history = sessions.get(sessionId) || [];
