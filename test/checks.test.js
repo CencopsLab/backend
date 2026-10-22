@@ -59,6 +59,22 @@ test('raises URL risk to at least 80 when live lookup cannot find the domain or 
   assert.equal(result.guidance.verdict, 'suspicious');
 });
 
+test('raises URL risk to at least 90 and explains the short-lived-domain signal when DNS cannot find the domain', () => {
+  const result = applyLookupPriority(assessUrl('https://example.com'), {
+    status: 'not_found',
+    domainExists: false,
+    httpStatus: null,
+    detail: 'The domain name could not be found in public DNS.',
+  });
+
+  assert.equal(result.riskScore, 90);
+  assert.equal(result.urlAssessment.riskScore, 90);
+  assert.equal(result.urlAssessment.recommendation, 'avoid');
+  assert.match(result.urlAssessment.reason, /short-lived domains that disappear after a short time/i);
+  assert.match(result.urlAssessment.reason, /does not prove the URL is a scam/i);
+  assert.match(result.guidance.meaning, /temporary DNS or configuration issues/i);
+});
+
 test('does not lower an existing deterministic score when lookup is not found', () => {
   const result = applyLookupPriority(assessUrl('http://user:pass@192.0.2.1:8080/urgent-login'), {
     status: 'not_found',

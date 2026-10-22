@@ -25,14 +25,19 @@ function assessUrl(url) {
 function applyLookupPriority(assessment, urlLookup) {
   if (urlLookup.status !== 'not_found') return assessment;
 
-  const riskScore = Math.max(80, assessment.urlAssessment.riskScore ?? 0);
-  const reason = 'The live lookup could not find the domain or requested page. Treat this as a high-risk signal, not proof of maliciousness.';
+  const missingDomain = urlLookup.domainExists === false;
+  const riskScore = Math.max(missingDomain ? 90 : 80, assessment.urlAssessment.riskScore ?? 0);
+  const reason = missingDomain
+    ? 'The domain could not be found in public DNS. Scammers may use short-lived domains that disappear after a short time, so this is a strong warning signal. Temporary DNS or configuration issues can also cause this, so it does not prove the URL is a scam.'
+    : 'The live lookup could not find the requested page. Treat this as a high-risk signal, not proof of maliciousness.';
   const guidance = assessment.guidance
     ? {
       ...assessment.guidance,
       verdict: 'suspicious',
       findings: [...assessment.guidance.findings, reason],
-      meaning: 'The live lookup did not find the domain or requested page. This can happen for unavailable or removed pages and does not by itself prove fraud.',
+      meaning: missingDomain
+        ? 'The domain was not found in public DNS. Short-lived scam domains can disappear, but temporary DNS or configuration issues are also possible; this result alone does not prove fraud.'
+        : 'The live lookup did not find the requested page. This can happen for unavailable or removed pages and does not by itself prove fraud.',
     }
     : assessment.guidance;
 
