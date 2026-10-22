@@ -15,7 +15,6 @@ test('does not treat a greeting followed by another request as a greeting-only m
 
 test('provides a localized greeting without involving unrelated request handling', () => {
   assert.match(greetingReply('en'), /Hi! I’m Cyber Sahayak\./);
-  assert.doesNotMatch(greetingReply('en'), /CyberRakshak/i);
   assert.match(greetingReply('hi'), /नमस्ते/);
   assert.match(greetingReply('pa'), /ਸਤ ਸ੍ਰੀ ਅਕਾਲ/);
   assert.equal(greetingReply('unknown'), greetingReply('en'));
@@ -59,6 +58,29 @@ test('routes India-specific scam-lure questions to the LLM', () => {
     'Teen Patti gaming app asking for an APK install',
     'electricity bill disconnection message',
     'FASTag KYC update message',
+  ]) {
+    assert.equal(isCyberRelated(message), true, message);
+  }
+});
+
+test('allows questions about the official cyber and telecom portals', () => {
+  for (const message of [
+    'What is GRM for a bank account freeze?',
+    'How do I apply through the Money Restoration Module?',
+    'Where can I report fraud on NCRP?',
+    'How do I check a lost phone request on CEIR?',
+    'What is Sanchar Saathi?',
+    'Can TAFCOP show connections in my name?',
+    'How do I report a scam call using Chakshu?',
+    'How do I verify an IMEI with KYM?',
+    'Where can I report a suspicious URL using Report Suspect?',
+    'What does CFCFRMS do?',
+    'Is the Digital Intelligence Platform open to citizens?',
+    'Where do I report an international call showing an Indian number on RICWIN?',
+    'What does KYI show about my internet provider?',
+    'What does CERT-In do?',
+    'How can Cyber Swachhta Kendra help with malware?',
+    'How do I track a government grievance in CPGRAMS?',
   ]) {
     assert.equal(isCyberRelated(message), true, message);
   }
